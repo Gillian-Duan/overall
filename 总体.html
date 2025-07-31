@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>经济数据可视化</title>
+  <!-- 引入Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 引入Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  
+  <!-- 配置Tailwind自定义颜色和字体 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36CFC9',
+            accent: '#722ED1',
+            neutral: '#1F2937',
+            'neutral-light': '#F3F4F6',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义工具类 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .card-shadow {
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
+      }
+      .transition-custom {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans text-neutral">
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <!-- 页面标题 -->
+    <header class="text-center mb-12">
+      <h1 class="text-[clamp(1.8rem,5vw,2.8rem)] font-bold text-neutral mb-3 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+        2018-2022年中国总体发展统计图表
+      </h1>
+      <p class="text-gray-600 max-w-2xl mx-auto text-lg">
+        展示国内生产总值、增长率及居民收入等总体发展指标的变化趋势
+      </p>
+    </header>
+    
+    <!-- 图表容器 -->
+    <div class="bg-white rounded-xl p-6 md:p-8 card-shadow mb-8">
+      <!-- 图表标题 -->
+      <div class="flex justify-between items-center mb-6">
+        <h2 id="chart-title" class="text-[clamp(1.2rem,3vw,1.6rem)] font-semibold text-neutral">
+          国内生产总值 (2018-2022年)
+        </h2>
+        <div class="flex space-x-2">
+          <button id="prev-btn" class="p-2 rounded-full bg-neutral-light hover:bg-primary hover:text-white transition-custom disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa fa-chevron-left"></i>
+          </button>
+          <button id="next-btn" class="p-2 rounded-full bg-neutral-light hover:bg-primary hover:text-white transition-custom">
+            <i class="fa fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- 图表导航指示器 -->
+      <div class="flex justify-center mb-6 space-x-2">
+        <span class="chart-indicator w-3 h-3 rounded-full bg-primary transition-custom"></span>
+        <span class="chart-indicator w-3 h-3 rounded-full bg-gray-300 transition-custom"></span>
+        <span class="chart-indicator w-3 h-3 rounded-full bg-gray-300 transition-custom"></span>
+      </div>
+      
+      <!-- 图表内容区域 -->
+      <div class="relative h-[400px] md:h-[500px] w-full">
+        <canvas id="economic-chart"></canvas>
+      </div>
+      
+      <!-- 数据说明 -->
+      <div id="data-source" class="mt-6 text-sm text-gray-500 italic text-center">
+        数据来源：国内生产总值及产业构成 (2018-2022年)
+      </div>
+    </div>
+    
+    <!-- 图表信息卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white rounded-xl p-6 card-shadow hover:translate-y-[-5px] transition-custom">
+        <div class="text-primary text-2xl mb-3">
+          <i class="fa fa-line-chart"></i>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">生产总值分析</h3>
+        <p class="text-gray-600 text-sm">展示国内生产总值及三次产业构成的变化趋势，反映经济结构调整。</p>
+      </div>
+      
+      <div class="bg-white rounded-xl p-6 card-shadow hover:translate-y-[-5px] transition-custom">
+        <div class="text-secondary text-2xl mb-3">
+          <i class="fa fa-area-chart"></i>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">经济增长指标</h3>
+        <p class="text-gray-600 text-sm">包含国内生产总值增速和城镇调查失业率，反映经济增长动力与就业情况。</p>
+      </div>
+      
+      <div class="bg-white rounded-xl p-6 card-shadow hover:translate-y-[-5px] transition-custom">
+        <div class="text-accent text-2xl mb-3">
+          <i class="fa fa-bar-chart"></i>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">收入与财政数据</h3>
+        <p class="text-gray-600 text-sm">展示居民收入与政府财政收支状况，反映国民财富分配与公共财政实力。</p>
+      </div>
+    </div>
+    
+    
+  </div>
+
+  <script>
+    // 经济数据
+    const years = ['2018', '2019', '2020', '2021', '2022'];
+    
+    // 第一个图表数据：国内生产总值及产业构成
+    const gdpData = {
+      labels: years,
+      datasets: [
+        {
+          label: '国内生产总值（亿元）',
+          data: [919281.1, 986515.2, 1013567.0, 1149237.0, 1210207.2],
+          borderColor: '#165DFF',
+          backgroundColor: 'rgba(22, 93, 255, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: '第一产业（亿元）',
+          data: [64745.2, 70473.6, 78030.9, 83216.5, 88345.1],
+          borderColor: '#36CFC9',
+          backgroundColor: 'rgba(54, 207, 201, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: '第二产业（亿元）',
+          data: [364835.2, 380670.6, 383562.4, 451544.1, 483164.5],
+          borderColor: '#722ED1',
+          backgroundColor: 'rgba(114, 46, 209, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: '第三产业（亿元）',
+          data: [489700.8, 535371.0, 551973.7, 614476.4, 638697.6],
+          borderColor: '#FF7D00',
+          backgroundColor: 'rgba(255, 125, 0, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        }
+      ]
+    };
+    
+    // 第二个图表数据：经济增长指标
+    const growthData = {
+      labels: years,
+      datasets: [
+        {
+          label: '国内生产总值增速（%）',
+          data: [6.7, 6.0, 2.2, 8.4, 3.0],
+          borderColor: '#165DFF',
+          backgroundColor: 'rgba(22, 93, 255, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y'
+        },
+        {
+          label: '城镇调查失业率（%）',
+          data: [4.9, 5.2, 5.2, 5.1, 5.5],
+          borderColor: '#F53F3F',
+          backgroundColor: 'rgba(245, 63, 63, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y1'
+        }
+      ]
+    };
+    
+    // 第三个图表数据：收入与财政数据
+    const incomeData = {
+      labels: years,
+      datasets: [
+        {
+          label: '全国居民人均可支配收入（元）',
+          data: [28228.0, 30732.8, 32188.8, 35128.1, 36883.3],
+          borderColor: '#165DFF',
+          backgroundColor: 'rgba(22, 93, 255, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y'
+        },
+        {
+          label: '全国一般公共预算收入（亿元）',
+          data: [183359.8, 190390.1, 182913.9, 202554.6, 203649.3],
+          borderColor: '#36CFC9',
+          backgroundColor: 'rgba(54, 207, 201, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y1'
+        },
+        {
+          label: '全国一般公共预算支出（亿元）',
+          data: [220904.1, 238858.4, 245679.0, 245673.0, 260552.1],
+          borderColor: '#722ED1',
+          backgroundColor: 'rgba(114, 46, 209, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y1'
+        }
+      ]
+    };
+    
+    // 图表配置
+    const chartTitles = [
+      '国内生产总值 (2018-2022年)',
+      '经济增长指标 (2018-2022年)',
+      '居民收入与财政收支 (2018-2022年)'
+    ];
+    
+    const dataSources = [
+      '数据来源：国内生产总值及产业构成 (2018-2022年)',
+      '数据来源：国内生产总值增速与城镇调查失业率 (2018-2022年)',
+      '数据来源：居民收入与财政收支数据 (2018-2022年)'
+    ];
+    
+    // 当前图表索引
+    let currentChartIndex = 0;
+    let economicChart;
+    
+    // 初始化图表
+    function initChart() {
+      const ctx = document.getElementById('economic-chart').getContext('2d');
+      
+      // 基础配置
+      const baseConfig = {
+        type: 'line',
+        data: gdpData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: {
+            duration: 1000,
+            easing: 'easeOutQuart'
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                padding: 20,
+                font: {
+                  size: 11
+                }
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              titleColor: '#1F2937',
+              bodyColor: '#4B5563',
+              borderColor: '#E5E7EB',
+              borderWidth: 1,
+              padding: 12,
+              boxPadding: 6,
+              usePointStyle: true,
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  // 格式化数值显示
+                  if (context.parsed.y !== null) {
+                    if (context.datasetIndex === 0 && currentChartIndex === 0) {
+                      label += context.parsed.y.toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+                    } else if (currentChartIndex === 1) {
+                      label += context.parsed.y.toFixed(1) + '%';
+                    } else if (currentChartIndex === 2 && context.datasetIndex === 0) {
+                      label += context.parsed.y.toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+                    } else {
+                      label += context.parsed.y.toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+                    }
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                font: {
+                  size: 11
+                }
+              }
+            },
+            y: {
+              beginAtZero: false,
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              },
+              ticks: {
+                font: {
+                  size: 11
+                },
+                callback: function(value) {
+                  if (currentChartIndex === 0) {
+                    return value >= 10000 ? (value / 10000).toFixed(1) + '万' : value;
+                  } else if (currentChartIndex === 1) {
+                    return value + '%';
+                  } else if (currentChartIndex === 2 && this.axis.id === 'y') {
+                    return value.toLocaleString('zh-CN');
+                  } else if (currentChartIndex === 2 && this.axis.id === 'y1') {
+                    return value >= 10000 ? (value / 10000).toFixed(1) + '万' : value;
+                  }
+                  return value;
+                }
+              }
+            }
+          },
+          interaction: {
+            mode: 'nearest',
+            axis: 'x',
+            intersect: false
+          },
+          elements: {
+            point: {
+              radius: 3,
+              hoverRadius: 6,
+              hitRadius: 10
+            }
+          }
+        }
+      };
+      
+      // 为第二和第三个图表添加第二个Y轴
+      if (currentChartIndex === 1 || currentChartIndex === 2) {
+        baseConfig.options.scales.y1 = {
+          position: 'right',
+          beginAtZero: currentChartIndex === 1 ? false : true,
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            font: {
+              size: 11
+            },
+            callback: function(value) {
+              if (currentChartIndex === 1) {
+                return value + '%';
+              } else if (currentChartIndex === 2) {
+                return value >= 10000 ? (value / 10000).toFixed(1) + '万' : value;
+              }
+              return value;
+            }
+          }
+        };
+      }
+      
+      // 根据当前图表索引设置数据
+      if (currentChartIndex === 1) {
+        baseConfig.data = growthData;
+      } else if (currentChartIndex === 2) {
+        baseConfig.data = incomeData;
+      }
+      
+      // 创建图表
+      economicChart = new Chart(ctx, baseConfig);
+    }
+    
+    // 更新图表
+    function updateChart() {
+      // 更新图表数据
+      if (currentChartIndex === 0) {
+        economicChart.data = gdpData;
+        // 移除可能存在的y1轴
+        if (economicChart.options.scales.y1) {
+          delete economicChart.options.scales.y1;
+        }
+      } else if (currentChartIndex === 1) {
+        economicChart.data = growthData;
+        // 添加y1轴配置
+        economicChart.options.scales.y1 = {
+          position: 'right',
+          beginAtZero: false,
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            font: {
+              size: 11
+            },
+            callback: function(value) {
+              return value + '%';
+            }
+          }
+        };
+      } else if (currentChartIndex === 2) {
+        economicChart.data = incomeData;
+        // 添加y1轴配置
+        economicChart.options.scales.y1 = {
+          position: 'right',
+          beginAtZero: true,
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            font: {
+              size: 11
+            },
+            callback: function(value) {
+              return value >= 10000 ? (value / 10000).toFixed(1) + '万' : value;
+            }
+          }
+        };
+      }
+      
+      // 更新图表标题和数据来源
+      document.getElementById('chart-title').textContent = chartTitles[currentChartIndex];
+      document.getElementById('data-source').textContent = dataSources[currentChartIndex];
+      
+      // 更新指示器
+      const indicators = document.querySelectorAll('.chart-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === currentChartIndex) {
+          indicator.classList.remove('bg-gray-300');
+          indicator.classList.add('bg-primary');
+        } else {
+          indicator.classList.remove('bg-primary');
+          indicator.classList.add('bg-gray-300');
+        }
+      });
+      
+      // 更新按钮状态
+      document.getElementById('prev-btn').disabled = currentChartIndex === 0;
+      document.getElementById('next-btn').disabled = currentChartIndex === 2;
+      
+      // 更新图表
+      economicChart.update();
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      // 初始化图表
+      initChart();
+      
+      // 绑定按钮事件
+      document.getElementById('prev-btn').addEventListener('click', function() {
+        if (currentChartIndex > 0) {
+          currentChartIndex--;
+          updateChart();
+        }
+      });
+      
+      document.getElementById('next-btn').addEventListener('click', function() {
+        if (currentChartIndex < 2) {
+          currentChartIndex++;
+          updateChart();
+        }
+      });
+      
+      // 点击指示器切换图表
+      const indicators = document.querySelectorAll('.chart-indicator');
+      indicators.forEach((indicator, index) => {
+        indicator.addEventListener('click', function() {
+          currentChartIndex = index;
+          updateChart();
+        });
+      });
+      
+      // 窗口大小变化时重新绘制图表
+      window.addEventListener('resize', function() {
+        economicChart.resize();
+      });
+    });
+  </script>
+</body>
+</html>
